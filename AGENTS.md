@@ -48,8 +48,11 @@ The core differentiator: **the AI infers what you need to see.** Not just execut
 # Sway (in tmux session 'sway')
 WLR_BACKENDS=headless WLR_RENDERER=pixman XDG_RUNTIME_DIR=/tmp/sway-runtime WLR_LIBINPUT_NO_DEVICES=1 sway
 
-# VNC (in tmux session 'vnc')
+# VNC TCP (in tmux session 'vnc') — for native VNC clients
 XDG_RUNTIME_DIR=/tmp/sway-runtime WAYLAND_DISPLAY=wayland-1 wayvnc --output=HEADLESS-1 0.0.0.0 5900
+
+# VNC WebSocket (in tmux session 'vnc-ws') — for noVNC in web client
+XDG_RUNTIME_DIR=/tmp/sway-runtime WAYLAND_DISPLAY=wayland-1 wayvnc --websocket --output=HEADLESS-1 -S /tmp/wayvnc-ws.sock 0.0.0.0 5901
 
 # Agent
 ANTHROPIC_API_KEY=dummy XDG_RUNTIME_DIR=/tmp/sway-runtime WAYLAND_DISPLAY=wayland-1 npx tsx src/index.ts
