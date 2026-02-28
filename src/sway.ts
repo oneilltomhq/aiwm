@@ -114,3 +114,54 @@ export async function screenshot(outputPath: string): Promise<string> {
   await execFileAsync("grim", [outputPath], { env });
   return outputPath;
 }
+
+// --- Input injection (wtype / ydotool) ---
+
+const inputEnv = {
+  ...process.env,
+  XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR ?? "/tmp/sway-runtime",
+  WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY ?? "wayland-1",
+};
+
+/**
+ * Type text into the currently focused window using wtype.
+ */
+export async function typeText(text: string): Promise<void> {
+  await execFileAsync("wtype", ["--", text], { env: inputEnv });
+}
+
+/**
+ * Send a key combination using wtype.
+ * Examples: "Return", "Tab", "BackSpace", "Left", "Home", "F5"
+ * Modifiers: "ctrl", "alt", "shift", "logo"
+ */
+export async function sendKey(key: string, modifiers: string[] = []): Promise<void> {
+  const args: string[] = [];
+  for (const mod of modifiers) {
+    args.push("-M", mod);
+  }
+  args.push("-k", key);
+  for (const mod of [...modifiers].reverse()) {
+    args.push("-m", mod);
+  }
+  await execFileAsync("wtype", args, { env: inputEnv });
+}
+
+/**
+ * Click at a position using ydotool.
+ * button: 0=left, 1=right, 2=middle
+ */
+export async function clickAt(x: number, y: number, button: number = 0): Promise<void> {
+  // ydotool uses absolute positioning with mousemove --absolute
+  await execFileAsync("ydotool", ["mousemove", "--absolute", "-x", String(x), "-y", String(y)], {});
+  await execFileAsync("ydotool", ["click", String(button)], {});
+}
+
+/**
+ * Scroll at current mouse position.
+ * direction: "up" or "down", amount is number of scroll clicks.
+ */
+export async function scroll(direction: "up" | "down", amount: number = 3): Promise<void> {
+  const delta = direction === "up" ? `-${amount}` : String(amount);
+  await execFileAsync("ydotool", ["mousemove", "-w", delta], {});
+}
