@@ -718,14 +718,17 @@ window._rfb = rfb;
   // --- Microphone ---
   async function startRecording() {
     if (isRecording) return;
+    console.log('[mic] startRecording called');
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
       });
+      console.log('[mic] getUserMedia succeeded');
       audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
       const source = audioContext.createMediaStreamSource(mediaStream);
       audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
 
+      let chunkCount = 0;
       audioProcessor.onaudioprocess = function(e) {
         if (!isRecording) return;
         const float32 = e.inputBuffer.getChannelData(0);
@@ -738,6 +741,8 @@ window._rfb = rfb;
         let binary = '';
         for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
         send({ type: 'audio', data: btoa(binary) });
+        chunkCount++;
+        if (chunkCount % 20 === 1) console.log('[mic] audio chunks sent:', chunkCount);
       };
 
       source.connect(audioProcessor);
@@ -745,14 +750,16 @@ window._rfb = rfb;
       isRecording = true;
       micBtn.classList.add('recording');
       send({ type: 'voice_start' });
+      console.log('[mic] recording started, voice_start sent');
     } catch (err) {
-      console.error('Mic error:', err);
-      addMessage('Microphone access denied.', 'error');
+      console.error('[mic] Error:', err);
+      addMessage('Microphone access denied or error: ' + (err.message || err), 'error');
     }
   }
 
   function stopRecording() {
     if (!isRecording) return;
+    console.log('[mic] stopRecording called');
     isRecording = false;
     micBtn.classList.remove('recording');
     if (audioProcessor) audioProcessor.disconnect();
