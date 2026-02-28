@@ -5,6 +5,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import * as sway from "./sway.js";
+import * as cdp from "./cdp.js";
 import { execFile } from "child_process";
 import { promisify } from "util";
 
@@ -43,8 +44,30 @@ export const spawnBrowserTool: AgentTool = {
     url: Type.String({ description: "URL to navigate to" }),
   }),
   async execute(_id, params) {
-    await sway.spawnWindow(`chromium --no-sandbox --disable-gpu "${params.url}"`);
-    await new Promise(r => setTimeout(r, 2000));
+    // Check if Chrome is already running with CDP
+    const cdpAvailable = await cdp.isAvailable();
+    if (cdpAvailable) {
+      // Navigate existing browser
+      const result = await cdp.navigate(params.url);
+      const windows = await sway.getWindows();
+      return {
+        content: [{ type: "text", text: `Navigated existing browser to ${params.url} (${result.title}). ${windows.length} windows open.` }],
+        details: { windows, cdp: true },
+      };
+    }
+    // Launch new Chrome with CDP enabled
+    const chromePath = `${process.env.HOME}/.cache/ms-playwright/chromium-1208/chrome-linux64/chrome`;
+    const flags = [
+      "--no-sandbox",
+      "--disable-gpu",
+      "--ozone-platform=wayland",
+      "--enable-features=UseOzonePlatform",
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--remote-debugging-port=9222",
+    ].join(" ");
+    await sway.spawnWindow(`${chromePath} ${flags} "${params.url}"`);
+    await new Promise(r => setTimeout(r, 4000));
     const windows = await sway.getWindows();
     return {
       content: [{ type: "text", text: `Browser opened to ${params.url}. ${windows.length} windows now open.` }],
@@ -248,12 +271,93 @@ export const sendKeyTool: AgentTool = {
   },
 };
 
+// --- navigate_browser ---
+export const navigateBrowserTool: AgentTool = {
+  name: "navigate_browser",
+  label: "Navigate Browser",
+  description: "Navigate the browser to a new URL using Chrome DevTools Protocol (CDP). " +
+    "This is the reliable way to navigate — avoids address bar typing issues.",
+  parameters: Type.Object({
+    url: Type.String({ description: "URL to navigate to" }),
+  }),
+  async execute(_id, params) {
+    const result = await cdp.navigate(params.url);
+    if (!result.success) {
+      return {
+        content: [{ type: "text", text: `Navigation failed: ${result.error}. Is a browser open with CDP enabled?` }],
+        details: { error: true },
+      };
+    }
+    return {
+      content: [{ type: "text", text: `Navigated to ${params.url} — page title: "${result.title}"` }],
+      details: { title: result.title },
+    };
+  },
+};
+
+// --- read_browser ---
+export const readBrowserTool: AgentTool = {
+  name: "read_browser",
+  label: "Read Browser",
+  description: "Read the text content of the current browser page. Useful for understanding what's " +
+    "displayed without needing a screenshot. Returns the page's visible text.",
+  parameters: Type.Object({}),
+  async execute(_id, _params) {
+    try {
+      const targets = await cdp.listTargets();
+      const page = targets.find(t => t.type === "page");
+      if (!page) {
+        return { content: [{ type: "text", text: "No browser tab found." }], details: {} };
+      }
+      const text = await cdp.getPageContent();
+      const truncated = text.length > 3000 ? text.substring(0, 3000) + "\n... (truncated)" : text;
+      return {
+        content: [{ type: "text", text: `Page: ${page.title}\nURL: ${page.url}\n\n${truncated}` }],
+        details: { url: page.url, title: page.title, fullLength: text.length },
+      };
+    } catch (err: any) {
+      return {
+        content: [{ type: "text", text: `Failed to read browser: ${err.message}` }],
+        details: { error: true },
+      };
+    }
+  },
+};
+
+// --- browser_js ---
+export const browserJsTool: AgentTool = {
+  name: "browser_js",
+  label: "Execute Browser JS",
+  description: "Execute JavaScript in the browser page. Use for interacting with web apps, " +
+    "clicking elements by selector, filling forms, extracting data, etc. " +
+    "Example: document.querySelector('button.submit').click()",
+  parameters: Type.Object({
+    expression: Type.String({ description: "JavaScript expression to evaluate in the browser page" }),
+  }),
+  async execute(_id, params) {
+    try {
+      const result = await cdp.evaluateJS(params.expression);
+      const text = result === undefined ? "(undefined)" : JSON.stringify(result);
+      return {
+        content: [{ type: "text", text: `Result: ${text}` }],
+        details: { result },
+      };
+    } catch (err: any) {
+      return {
+        content: [{ type: "text", text: `JS error: ${err.message}` }],
+        details: { error: true },
+      };
+    }
+  },
+};
+
 // --- click ---
 export const clickTool: AgentTool = {
   name: "click",
   label: "Click",
-  description: "Click at a specific position on the screen. Use screenshot_workspace to see coordinates first. " +
-    "Useful for clicking buttons in GUIs, browser elements, etc.",
+  description: "Click at a specific position on the screen using ydotool. Requires /dev/uinput access. " +
+    "Use screenshot_workspace to see coordinates first. " +
+    "For browser interaction, prefer navigate_browser or send_key with Tab to navigate between elements.",
   parameters: Type.Object({
     x: Type.Number({ description: "X coordinate in pixels" }),
     y: Type.Number({ description: "Y coordinate in pixels" }),
@@ -266,11 +370,18 @@ export const clickTool: AgentTool = {
   async execute(_id, params) {
     const buttonMap: Record<string, number> = { left: 0, right: 1, middle: 2 };
     const btn = buttonMap[params.button ?? "left"];
-    await sway.clickAt(params.x, params.y, btn);
-    return {
-      content: [{ type: "text", text: `Clicked ${params.button ?? 'left'} at (${params.x}, ${params.y})` }],
-      details: {},
-    };
+    try {
+      await sway.clickAt(params.x, params.y, btn);
+      return {
+        content: [{ type: "text", text: `Clicked ${params.button ?? 'left'} at (${params.x}, ${params.y})` }],
+        details: {},
+      };
+    } catch (err: any) {
+      return {
+        content: [{ type: "text", text: `Click failed (ydotool requires /dev/uinput): ${err.message}. Use keyboard navigation instead (Tab, Enter, send_key).` }],
+        details: { error: true },
+      };
+    }
   },
 };
 
@@ -302,6 +413,9 @@ export const allTools: AgentTool[] = [
   bashTool,
   typeTextTool,
   sendKeyTool,
+  navigateBrowserTool,
+  readBrowserTool,
+  browserJsTool,
   clickTool,
   scrollTool,
 ];

@@ -37,7 +37,10 @@ You have these workspace tools:
 - bash: Run any command on the server
 - type_text: Type text into the focused window (terminals, editors, browser fields)
 - send_key: Send key presses and shortcuts (Enter, Ctrl+C, Tab, arrow keys, etc.)
-- click: Click at screen coordinates (use screenshot to find positions)
+- navigate_browser: Navigate the browser to a URL (uses CDP, very reliable)
+- read_browser: Read the text content of the current browser page
+- browser_js: Execute JavaScript in the browser page (click elements, fill forms, extract data)
+- click: Click at screen coordinates (requires /dev/uinput; prefer keyboard navigation)
 - scroll: Scroll up/down in the focused window
 
 You can fully interact with any application in the workspace — not just spawn and arrange them,
