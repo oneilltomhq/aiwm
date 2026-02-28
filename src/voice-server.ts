@@ -125,7 +125,9 @@ export function startVoiceServer(config: VoiceServerConfig) {
     });
   });
 
-  // Subscribe to agent events for live feedback to all clients
+  // Subscribe to agent events for live feedback to all clients.
+  // This handles broadcasts for REPL and any other prompt source.
+  // processUserInput also captures response text for TTS via its own subscription.
   agent.subscribe((event) => {
     const clients = [...wss.clients].filter(c => c.readyState === WebSocket.OPEN);
     switch (event.type) {
@@ -136,7 +138,8 @@ export function startVoiceServer(config: VoiceServerConfig) {
         break;
       case "message_end": {
         const msg = event.message as any;
-        if (msg.content) {
+        // Only broadcast assistant messages, not user echoes or tool results
+        if (msg.role === "assistant" && msg.content) {
           for (const block of msg.content) {
             if (block.type === "text" && block.text) {
               for (const c of clients) {
@@ -262,14 +265,30 @@ async function processUserInput(
   sendToClient(client.ws, { type: "thinking" });
 
   try {
-    // Feed text to the agent
-    const result = await agent.prompt(text);
+    // Collect agent response text via a temporary event subscription.
+    // The global subscription in startVoiceServer handles sending the
+    // response text to all clients — this one just captures it for TTS.
+    let responseText = "";
+    const unsub = agent.subscribe((event) => {
+      if (event.type === "message_end") {
+        const msg = event.message as any;
+        if (msg.role === "assistant" && msg.content) {
+          for (const block of msg.content) {
+            if (block.type === "text" && block.text) {
+              responseText = block.text;
+            }
+          }
+        }
+      }
+    });
 
-    // Extract text response from agent
-    const responseText = extractAgentText(result);
+    // Feed text to the agent (returns void, response comes via events)
+    await agent.prompt(text);
+    unsub();
 
     if (responseText && elevenKey) {
       // Generate TTS audio
+      console.log(`[voice] TTS: generating audio for ${responseText.length} chars`);
       sendToClient(client.ws, { type: "tts_start" });
       try {
         await textToSpeechStream(responseText, {
@@ -282,44 +301,20 @@ async function processUserInput(
           });
         });
         sendToClient(client.ws, { type: "audio_end" });
+        console.log("[voice] TTS: audio sent");
       } catch (ttsErr: any) {
         console.error("[voice] TTS error:", ttsErr.message);
         sendToClient(client.ws, { type: "error", message: `TTS error: ${ttsErr.message}` });
       }
+    } else if (!elevenKey) {
+      console.log("[voice] TTS: skipped (no API key)");
+    } else {
+      console.log("[voice] TTS: skipped (no response text)");
     }
   } catch (err: any) {
     console.error("[voice] Agent error:", err.message);
     sendToClient(client.ws, { type: "error", message: `Agent error: ${err.message}` });
   }
-}
-
-function extractAgentText(result: any): string {
-  // Pi agent result structure varies; extract text from content blocks
-  if (!result) return "";
-
-  // If result has messages, find the last assistant message
-  if (result.messages) {
-    for (const msg of [...result.messages].reverse()) {
-      if (msg.role === "assistant" && msg.content) {
-        for (const block of msg.content) {
-          if (block.type === "text" && block.text) {
-            return block.text;
-          }
-        }
-      }
-    }
-  }
-
-  // Direct content blocks
-  if (result.content) {
-    for (const block of result.content) {
-      if (block.type === "text" && block.text) {
-        return block.text;
-      }
-    }
-  }
-
-  return "";
 }
 
 function sendToClient(ws: WebSocket | globalThis.WebSocket, msg: any) {

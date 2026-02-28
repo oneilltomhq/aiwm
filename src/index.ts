@@ -4,6 +4,7 @@
  * An orchestrator agent that controls a headless sway compositor,
  * managing workspace layout based on conversation context and viewport.
  */
+import "dotenv/config";
 import { Agent } from "@mariozechner/pi-agent-core";
 import { getModel, registerBuiltInApiProviders } from "@mariozechner/pi-ai";
 import { allTools } from "./tools.js";
