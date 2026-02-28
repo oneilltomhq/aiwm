@@ -13,8 +13,11 @@ The core differentiator: **the AI infers what you need to see.** Not just execut
 ### What works
 - Headless sway on the server (no GPU, `WLR_BACKENDS=headless WLR_RENDERER=pixman`)
 - Pi agent framework (`@mariozechner/pi-*` v0.55.1) as orchestrator
-- 11 tools: `spawn_terminal`, `spawn_browser`, `arrange_workspace`, `set_viewport`, `screenshot_workspace`, `list_windows`, `bash`, `type_text`, `send_key`, `click`, `scroll`
-- Full input injection: `wtype` for keyboard input, `ydotool` for mouse events
+- 14 tools: `spawn_terminal`, `spawn_browser`, `arrange_workspace`, `set_viewport`, `screenshot_workspace`, `list_windows`, `bash`, `type_text`, `send_key`, `navigate_browser`, `read_browser`, `browser_js`, `click`, `scroll`
+- Full input injection: `wtype` for keyboard input, `ydotool` for mouse events (needs `/dev/uinput`)
+- Headed Chromium (Playwright's Chrome for Testing) running in sway with Wayland/Ozone
+- Chrome DevTools Protocol (CDP) on port 9222 for reliable browser control
+- `src/cdp.ts` — CDP WebSocket client (navigate, read content, execute JS)
 - Viewport adaptation: desktop (tiled) vs phone (stacking + AI picks focus)
 - wayvnc streaming on port 5900
 - LLM calls via exe.dev gateway (`http://169.254.169.254/gateway/llm/anthropic`) with `ANTHROPIC_API_KEY=dummy`
@@ -58,8 +61,8 @@ Sway and VNC may already be running in tmux sessions. Check `tmux ls`.
 
 ## What to build next (priority order)
 
-### 1. Chromium in sway
-Prove that `spawn_browser` works — headful Chromium running inside headless sway, navigable, screenshottable. May need `--no-sandbox --disable-gpu` flags. Install Chromium if not present.
+### 1. ~~Chromium in sway~~ ✅ DONE
+Chromium (Playwright's Chrome for Testing) runs headed in headless sway with `--ozone-platform=wayland --no-sandbox --disable-gpu --remote-debugging-port=9222`. Navigation via CDP (Chrome DevTools Protocol) is reliable. Agent can screenshot, read page text, and execute JS in the browser.
 
 ### 2. WebSocket protocol between client and orchestrator
 Right now viewport changes are communicated via chat ("I switched to my phone"). Instead:
