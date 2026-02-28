@@ -32,16 +32,30 @@ The core differentiator: **the AI infers what you need to see.** Not just execut
   - Text input also supported alongside voice
 
 ### Key files
-- `src/index.ts` — main entry, Pi Agent setup, system prompt, REPL + voice server init
+- `src/index.ts` — entry point, wires agent + sessions + server together
+- `src/agent.ts` — Agent setup, model config, system prompt
 - `src/tools.ts` — all agent tools (sway IPC wrappers)
 - `src/sway.ts` — low-level sway IPC (calls `swaymsg`, `grim`)
-- `src/voice-server.ts` — WebSocket server, voice pipeline orchestration, HTTP static file server
+- `src/cdp.ts` — Chrome DevTools Protocol helper
 - `src/deepgram.ts` — Deepgram streaming STT via WebSocket
 - `src/elevenlabs.ts` — ElevenLabs TTS via streaming REST
-- `src/cdp.ts` — Chrome DevTools Protocol helper
-- `client/index.html` — web thin client (mic capture, audio playback, chat UI)
+- `src/server/protocol.ts` — WebSocket message types + parsing/validation
+- `src/server/session.ts` — session management (identity, viewport, roles)
+- `src/server/agent-bridge.ts` — bridges agent events → sessions, prompt queue
+- `src/server/voice.ts` — STT/TTS lifecycle per session
+- `src/server/ws.ts` — WebSocket upgrade routing + message handling
+- `src/server/http.ts` — static file server
+- `src/server/vnc-proxy.ts` — raw TCP proxy to wayvnc
+- `client/index.html` — voice-only thin client (fullscreen VNC + floating mic)
 - `config/sway-headless.conf` — sway config for headless mode
 - `.env.example` — template for API keys (Deepgram, ElevenLabs)
+
+### Tests (vitest, 60 tests)
+- `src/server/protocol.test.ts` — message parsing/validation (20 tests)
+- `src/server/session.test.ts` — session lifecycle, events (17 tests)
+- `src/server/agent-bridge.test.ts` — event routing, prompt queue (12 tests)
+- `src/server/voice.test.ts` — STT/TTS lifecycle (11 tests)
+- Run: `npm test` or `npx vitest run`
 
 ### How to run
 ```bash
