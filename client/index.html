@@ -6,81 +6,29 @@
 <title>AIWM</title>
 <style>
   :root {
-    --bg: #0a0a0f;
-    --surface: #14141f;
-    --surface2: #1e1e2e;
-    --border: #2a2a3e;
-    --text: #e0e0f0;
-    --text-dim: #8888aa;
     --accent: #6c63ff;
-    --accent-glow: rgba(108, 99, 255, 0.3);
+    --accent-glow: rgba(108, 99, 255, 0.35);
     --danger: #ff4466;
-    --success: #44ff88;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
+    background: #000;
+    color: #fff;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--text);
     height: 100dvh;
-    display: flex;
+    width: 100dvw;
     overflow: hidden;
-  }
-
-  /* --- Layout: desktop = side by side, mobile = tabs --- */
-  .layout {
-    display: flex;
-    width: 100%;
-    height: 100%;
-  }
-
-  /* VNC panel */
-  .vnc-panel {
-    flex: 1;
     display: flex;
     flex-direction: column;
-    min-width: 0;
-    position: relative;
-    background: #000;
   }
 
-  .vnc-panel .panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 12px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    z-index: 2;
-  }
-
-  .vnc-panel .panel-header h2 {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-dim);
-    letter-spacing: 1px;
-  }
-
-  .vnc-status {
-    font-size: 11px;
-    color: var(--text-dim);
-  }
-
-  .vnc-container {
+  /* --- Fullscreen VNC workspace --- */
+  .workspace {
     flex: 1;
     position: relative;
     overflow: hidden;
-  }
-
-  #vnc-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
   }
 
   .vnc-overlay {
@@ -89,15 +37,16 @@
     left: 50%;
     transform: translate(-50%, -50%);
     text-align: center;
-    color: var(--text-dim);
+    color: #666;
     font-size: 14px;
     z-index: 1;
+    pointer-events: none;
   }
 
   .vnc-overlay .spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid var(--border);
+    border: 3px solid #333;
     border-top-color: var(--accent);
     border-radius: 50%;
     animation: spin 1s linear infinite;
@@ -106,253 +55,85 @@
 
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Resize handle */
-  .resize-handle {
-    width: 5px;
-    background: var(--border);
-    cursor: col-resize;
-    flex-shrink: 0;
-    transition: background 0.15s;
-  }
+  .vnc-overlay.hidden { display: none; }
 
-  .resize-handle:hover, .resize-handle.dragging {
-    background: var(--accent);
-  }
-
-  /* Chat panel */
-  .chat-panel {
-    width: 380px;
-    min-width: 280px;
-    max-width: 600px;
+  /* --- Floating voice controls --- */
+  .voice-controls {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
     display: flex;
     flex-direction: column;
-    border-left: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .chat-panel .panel-header {
-    display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 8px 12px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .chat-panel .panel-header h1 {
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: 2px;
-    color: var(--accent);
-  }
-
-  .status {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: var(--text-dim);
-  }
-
-  .status-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--danger);
-  }
-
-  .status-dot.connected { background: var(--success); }
-
-  .messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
     gap: 8px;
+    pointer-events: none;
   }
 
-  .message {
-    max-width: 92%;
-    padding: 8px 12px;
-    border-radius: 10px;
+  /* Transcript bubble */
+  .transcript {
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 8px 16px;
     font-size: 13px;
-    line-height: 1.45;
-    word-wrap: break-word;
-    animation: fadeIn 0.15s ease;
+    color: rgba(255, 255, 255, 0.8);
+    max-width: 400px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
   }
 
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(3px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
+  .transcript.visible { opacity: 1; }
 
-  .message.user {
-    align-self: flex-end;
-    background: var(--accent);
-    color: white;
-    border-bottom-right-radius: 3px;
-  }
-
-  .message.agent {
-    align-self: flex-start;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-bottom-left-radius: 3px;
-    white-space: pre-wrap;
-  }
-
-  .message.system {
-    align-self: center;
-    background: transparent;
-    color: var(--text-dim);
+  /* Status indicator (thinking, speaking) */
+  .status-pill {
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 4px 12px;
     font-size: 11px;
-    padding: 3px 6px;
-  }
-
-  .message.tool {
-    align-self: flex-start;
-    background: rgba(108, 99, 255, 0.08);
-    border: 1px solid rgba(108, 99, 255, 0.2);
-    font-family: 'SF Mono', 'Fira Code', monospace;
-    font-size: 11px;
-    color: var(--text-dim);
-    border-radius: 6px;
-  }
-
-  .message.error {
-    align-self: center;
-    background: rgba(255, 68, 102, 0.1);
-    border: 1px solid rgba(255, 68, 102, 0.3);
-    color: var(--danger);
-    font-size: 11px;
-  }
-
-  .transcript-bar {
-    padding: 6px 12px;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    font-size: 12px;
-    color: var(--text-dim);
-    font-style: italic;
-    min-height: 0;
-    transition: min-height 0.2s;
-    overflow: hidden;
-  }
-
-  .transcript-bar.active { min-height: 28px; }
-
-  .input-area {
+    color: rgba(255, 255, 255, 0.5);
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 12px;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    flex-shrink: 0;
   }
 
-  .text-input {
-    flex: 1;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    padding: 8px 14px;
-    color: var(--text);
-    font-size: 13px;
-    outline: none;
-    font-family: inherit;
-  }
+  .status-pill.visible { opacity: 1; }
 
-  .text-input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-glow);
-  }
-
-  .text-input::placeholder { color: var(--text-dim); }
-
-  .btn {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    border: none;
-    cursor: pointer;
+  .thinking-dots {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s;
-    flex-shrink: 0;
+    gap: 3px;
   }
 
-  .btn:active { transform: scale(0.92); }
-
-  .btn-send { background: var(--accent); color: white; }
-  .btn-send:hover { background: #7b73ff; }
-
-  .btn-mic {
-    background: var(--surface2);
-    border: 2px solid var(--border);
-    color: var(--text-dim);
-  }
-
-  .btn-mic:hover { border-color: var(--accent); color: var(--accent); }
-
-  .btn-mic.recording {
-    background: var(--danger);
-    border-color: var(--danger);
-    color: white;
-    animation: pulse 1.5s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 68, 102, 0.4); }
-    50% { box-shadow: 0 0 0 6px rgba(255, 68, 102, 0); }
-  }
-
-  .thinking {
-    display: none;
-    align-self: flex-start;
-    padding: 8px 12px;
-    gap: 4px;
-  }
-
-  .thinking.visible { display: flex; }
-
-  .thinking span {
-    width: 5px;
-    height: 5px;
-    background: var(--text-dim);
+  .thinking-dots span {
+    width: 4px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.4);
     border-radius: 50%;
     animation: bounce 1.4s ease-in-out infinite;
   }
 
-  .thinking span:nth-child(2) { animation-delay: 0.16s; }
-  .thinking span:nth-child(3) { animation-delay: 0.32s; }
+  .thinking-dots span:nth-child(2) { animation-delay: 0.16s; }
+  .thinking-dots span:nth-child(3) { animation-delay: 0.32s; }
 
   @keyframes bounce {
     0%, 80%, 100% { transform: translateY(0); }
-    40% { transform: translateY(-6px); }
+    40% { transform: translateY(-4px); }
   }
-
-  .audio-indicator {
-    display: none;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    background: rgba(108, 99, 255, 0.1);
-    border-radius: 10px;
-    font-size: 10px;
-    color: var(--accent);
-  }
-
-  .audio-indicator.playing { display: inline-flex; }
 
   .audio-bars {
     display: flex;
     gap: 2px;
     align-items: flex-end;
-    height: 12px;
+    height: 10px;
   }
 
   .audio-bars span {
@@ -363,118 +144,95 @@
   }
 
   .audio-bars span:nth-child(1) { height: 3px; animation-delay: 0s; }
-  .audio-bars span:nth-child(2) { height: 6px; animation-delay: 0.15s; }
-  .audio-bars span:nth-child(3) { height: 10px; animation-delay: 0.3s; }
-  .audio-bars span:nth-child(4) { height: 5px; animation-delay: 0.45s; }
+  .audio-bars span:nth-child(2) { height: 5px; animation-delay: 0.15s; }
+  .audio-bars span:nth-child(3) { height: 8px; animation-delay: 0.3s; }
+  .audio-bars span:nth-child(4) { height: 4px; animation-delay: 0.45s; }
 
   @keyframes audioBar {
     0%, 100% { transform: scaleY(0.4); }
     50% { transform: scaleY(1); }
   }
 
-  /* Mobile: tabs */
-  .mobile-tabs {
-    display: none;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .mobile-tabs button {
-    flex: 1;
-    padding: 10px;
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: var(--text-dim);
-    font-size: 13px;
-    font-weight: 500;
+  /* Mic button */
+  .mic-btn {
+    pointer-events: auto;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    color: rgba(255, 255, 255, 0.6);
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
   }
 
-  .mobile-tabs button.active {
+  .mic-btn:hover {
+    border-color: var(--accent);
     color: var(--accent);
-    border-bottom-color: var(--accent);
   }
 
-  @media (max-width: 768px) {
-    .layout { flex-direction: column; }
-    .resize-handle { display: none; }
-    .chat-panel {
-      width: 100%;
-      max-width: none;
-      border-left: none;
-    }
-    .mobile-tabs { display: flex; }
-    .vnc-panel.hidden, .chat-panel.hidden { display: none; }
-    .vnc-panel, .chat-panel { flex: 1; }
+  .mic-btn:active { transform: scale(0.92); }
+
+  .mic-btn.recording {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: white;
+    box-shadow: 0 0 20px rgba(255, 68, 102, 0.4);
+    animation: pulse 1.5s ease-in-out infinite;
   }
 
-  ::-webkit-scrollbar { width: 5px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 68, 102, 0.4); }
+    50% { box-shadow: 0 0 0 10px rgba(255, 68, 102, 0); }
+  }
+
+  /* Connection indicator */
+  .connection-dot {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ff4466;
+    z-index: 10;
+    transition: background 0.3s;
+  }
+
+  .connection-dot.connected { background: #44ff88; }
 </style>
 </head>
 <body>
 
-<div class="layout" id="layout">
-  <!-- VNC Panel -->
-  <div class="vnc-panel" id="vncPanel">
-    <div class="panel-header">
-      <h2>WORKSPACE</h2>
-      <span class="vnc-status" id="vncStatus">Connecting...</span>
-    </div>
-    <div class="vnc-container" id="vncContainer">
-      <div class="vnc-overlay" id="vncOverlay">
-        <div class="spinner"></div>
-        <div>Connecting to workspace...</div>
-      </div>
-    </div>
+<div class="workspace" id="workspace">
+  <div class="vnc-overlay" id="vncOverlay">
+    <div class="spinner"></div>
+    <div>Connecting to workspace...</div>
   </div>
 
-  <!-- Resize handle -->
-  <div class="resize-handle" id="resizeHandle"></div>
+  <div class="connection-dot" id="connectionDot"></div>
 
-  <!-- Chat Panel -->
-  <div class="chat-panel" id="chatPanel">
-    <div class="panel-header">
-      <h1>AIWM</h1>
-      <div class="status">
-        <div class="audio-indicator" id="audioIndicator">
-          <div class="audio-bars"><span></span><span></span><span></span><span></span></div>
-          Speaking
-        </div>
-        <span id="statusText">Connecting...</span>
-        <div class="status-dot" id="statusDot"></div>
-      </div>
+  <div class="voice-controls">
+    <div class="transcript" id="transcript"></div>
+    <div class="status-pill" id="statusPill">
+      <div class="thinking-dots" id="thinkingDots" style="display:none"><span></span><span></span><span></span></div>
+      <div class="audio-bars" id="audioBars" style="display:none"><span></span><span></span><span></span><span></span></div>
+      <span id="statusText"></span>
     </div>
-
-    <!-- Mobile tabs -->
-    <div class="mobile-tabs" id="mobileTabs">
-      <button class="active" data-tab="chat">Chat</button>
-      <button data-tab="workspace">Workspace</button>
-    </div>
-
-    <div class="messages" id="messages"></div>
-
-    <div class="transcript-bar" id="transcriptBar"></div>
-
-    <div class="input-area">
-      <button class="btn btn-mic" id="micBtn" title="Hold to talk">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-          <line x1="12" y1="19" x2="12" y2="23"/>
-          <line x1="8" y1="23" x2="16" y2="23"/>
-        </svg>
-      </button>
-      <input type="text" class="text-input" id="textInput" placeholder="Type a message..." autocomplete="off">
-      <button class="btn btn-send" id="sendBtn" title="Send">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-        </svg>
-      </button>
-    </div>
+    <button class="mic-btn" id="micBtn" title="Hold to talk">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+    </button>
   </div>
 </div>
 
@@ -482,22 +240,18 @@
 <script type="module">
 import RFB from './novnc/core/rfb.js';
 
-const vncContainer = document.getElementById('vncContainer');
+const workspace = document.getElementById('workspace');
 const vncOverlay = document.getElementById('vncOverlay');
-const vncStatus = document.getElementById('vncStatus');
-
 let rfb = null;
 
 function connectVNC() {
-  // VNC WebSocket is proxied through the same server on /vnc
   const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = wsProto + '//' + location.host + '/vnc';
 
-  vncStatus.textContent = 'Connecting...';
-  vncOverlay.style.display = '';
+  vncOverlay.classList.remove('hidden');
 
   try {
-    rfb = new RFB(vncContainer, url, {
+    rfb = new RFB(workspace, url, {
       scaleViewport: true,
       resizeSession: false,
       showDotCursor: true,
@@ -506,48 +260,32 @@ function connectVNC() {
     });
 
     rfb.addEventListener('connect', () => {
-      vncStatus.textContent = 'Connected';
-      vncOverlay.style.display = 'none';
+      vncOverlay.classList.add('hidden');
     });
 
-    rfb.addEventListener('disconnect', (e) => {
-      vncStatus.textContent = 'Disconnected';
-      vncOverlay.innerHTML = '<div class="spinner"></div><div>Workspace disconnected. Reconnecting...</div>';
-      vncOverlay.style.display = '';
+    rfb.addEventListener('disconnect', () => {
+      vncOverlay.innerHTML = '<div class="spinner"></div><div>Reconnecting...</div>';
+      vncOverlay.classList.remove('hidden');
       setTimeout(connectVNC, 3000);
     });
-
-    rfb.addEventListener('desktopname', (e) => {
-      vncStatus.textContent = e.detail.name || 'Connected';
-    });
   } catch (e) {
-    console.error('VNC connection error:', e);
-    vncStatus.textContent = 'Error';
-    vncOverlay.innerHTML = '<div>Failed to connect to workspace</div><div style="font-size:11px;margin-top:8px;color:#666">VNC WebSocket proxy may not be available</div>';
+    console.error('VNC error:', e);
     setTimeout(connectVNC, 5000);
   }
 }
 
 connectVNC();
-
-// Make rfb accessible for debugging
-window._rfb = rfb;
 </script>
 
 <script>
 (function() {
-  const messagesEl = document.getElementById('messages');
-  const textInput = document.getElementById('textInput');
-  const sendBtn = document.getElementById('sendBtn');
   const micBtn = document.getElementById('micBtn');
-  const statusDot = document.getElementById('statusDot');
+  const connectionDot = document.getElementById('connectionDot');
+  const transcript = document.getElementById('transcript');
+  const statusPill = document.getElementById('statusPill');
   const statusText = document.getElementById('statusText');
-  const transcriptBar = document.getElementById('transcriptBar');
-  const audioIndicator = document.getElementById('audioIndicator');
-  const resizeHandle = document.getElementById('resizeHandle');
-  const chatPanel = document.getElementById('chatPanel');
-  const vncPanel = document.getElementById('vncPanel');
-  const mobileTabs = document.getElementById('mobileTabs');
+  const thinkingDots = document.getElementById('thinkingDots');
+  const audioBars = document.getElementById('audioBars');
 
   let ws = null;
   let audioContext = null;
@@ -557,45 +295,7 @@ window._rfb = rfb;
   let audioQueue = [];
   let isPlaying = false;
   let reconnectTimer = null;
-
-  // --- Resize handle ---
-  let isResizing = false;
-  resizeHandle.addEventListener('mousedown', (e) => {
-    isResizing = true;
-    resizeHandle.classList.add('dragging');
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  });
-  document.addEventListener('mousemove', (e) => {
-    if (!isResizing) return;
-    const layoutRect = document.getElementById('layout').getBoundingClientRect();
-    const chatWidth = layoutRect.right - e.clientX;
-    const clamped = Math.max(280, Math.min(600, chatWidth));
-    chatPanel.style.width = clamped + 'px';
-  });
-  document.addEventListener('mouseup', () => {
-    if (isResizing) {
-      isResizing = false;
-      resizeHandle.classList.remove('dragging');
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
-  });
-
-  // --- Mobile tabs ---
-  mobileTabs.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      mobileTabs.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      if (btn.dataset.tab === 'workspace') {
-        vncPanel.classList.remove('hidden');
-        chatPanel.classList.add('hidden');
-      } else {
-        chatPanel.classList.remove('hidden');
-        vncPanel.classList.add('hidden');
-      }
-    });
-  });
+  let transcriptFadeTimer = null;
 
   // --- WebSocket ---
   function connect() {
@@ -603,8 +303,7 @@ window._rfb = rfb;
     ws = new WebSocket(proto + '//' + location.host);
 
     ws.onopen = () => {
-      statusDot.classList.add('connected');
-      statusText.textContent = 'Connected';
+      connectionDot.classList.add('connected');
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
       ws.send(JSON.stringify({
         type: 'viewport',
@@ -614,13 +313,12 @@ window._rfb = rfb;
     };
 
     ws.onmessage = (event) => {
-      try { handleServerMessage(JSON.parse(event.data)); }
+      try { handleMessage(JSON.parse(event.data)); }
       catch (e) { console.error('Parse error:', e); }
     };
 
     ws.onclose = () => {
-      statusDot.classList.remove('connected');
-      statusText.textContent = 'Disconnected';
+      connectionDot.classList.remove('connected');
       reconnectTimer = setTimeout(connect, 2000);
     };
 
@@ -633,63 +331,102 @@ window._rfb = rfb;
     }
   }
 
-  function handleServerMessage(msg) {
+  function handleMessage(msg) {
     switch (msg.type) {
-      case 'response':
-        addMessage(msg.text, 'agent');
-        break;
-      case 'user_message':
-        addMessage(msg.text, 'user');
-        break;
       case 'transcript':
-        if (msg.text) {
-          transcriptBar.textContent = msg.isFinal ? '' : '\u{1F399}\uFE0F ' + msg.text;
-          transcriptBar.classList.toggle('active', !msg.isFinal && !!msg.text);
+        if (msg.text && !msg.isFinal) {
+          showTranscript(msg.text);
+        } else {
+          hideTranscript();
         }
         break;
-      case 'audio':
-        audioQueue.push(msg.data);
-        if (!isPlaying) playNextAudioChunk();
+
+      case 'thinking':
+        showStatus('thinking');
         break;
-      case 'audio_end':
+
+      case 'thinking_done':
+      case 'response':
+        hideStatus();
         break;
+
       case 'tts_start':
         audioQueue = [];
         break;
+
+      case 'audio':
+        audioQueue.push(msg.data);
+        if (!isPlaying) playAudio();
+        break;
+
+      case 'audio_end':
+        break;
+
       case 'tool_call':
-        addMessage('\u{1F527} ' + msg.name + '(' + truncate(JSON.stringify(msg.args), 100) + ')', 'tool');
+        // Could show subtle indicator, for now silent
         break;
-      case 'thinking':
-        showThinking(true);
-        break;
-      case 'thinking_done':
-        showThinking(false);
-        break;
+
       case 'error':
-        addMessage(msg.message, 'error');
+        console.error('[aiwm]', msg.message);
+        break;
+
+      case 'user_message':
+        // No chat UI — voice-only
         break;
     }
   }
 
+  // --- Transcript overlay ---
+  function showTranscript(text) {
+    clearTimeout(transcriptFadeTimer);
+    transcript.textContent = text;
+    transcript.classList.add('visible');
+  }
+
+  function hideTranscript() {
+    transcriptFadeTimer = setTimeout(() => {
+      transcript.classList.remove('visible');
+    }, 500);
+  }
+
+  // --- Status pill ---
+  function showStatus(mode) {
+    if (mode === 'thinking') {
+      thinkingDots.style.display = 'flex';
+      audioBars.style.display = 'none';
+      statusText.textContent = 'Thinking...';
+    } else if (mode === 'speaking') {
+      thinkingDots.style.display = 'none';
+      audioBars.style.display = 'flex';
+      statusText.textContent = 'Speaking';
+    }
+    statusPill.classList.add('visible');
+  }
+
+  function hideStatus() {
+    statusPill.classList.remove('visible');
+  }
+
   // --- Audio playback ---
-  async function playNextAudioChunk() {
+  async function playAudio() {
     if (audioQueue.length === 0) {
       isPlaying = false;
-      audioIndicator.classList.remove('playing');
+      hideStatus();
       return;
     }
     isPlaying = true;
-    audioIndicator.classList.add('playing');
-    await new Promise(r => setTimeout(r, 200));
+    showStatus('speaking');
 
+    // Batch all available chunks
+    await new Promise(r => setTimeout(r, 150));
     const chunks = audioQueue.splice(0);
-    const binaryChunks = chunks.map(function(b64) {
+    const binaryChunks = chunks.map(b64 => {
       const raw = atob(b64);
       const arr = new Uint8Array(raw.length);
       for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
       return arr;
     });
-    const totalLen = binaryChunks.reduce(function(s, c) { return s + c.length; }, 0);
+    const totalLen = binaryChunks.reduce((s, c) => s + c.length, 0);
     const combined = new Uint8Array(totalLen);
     let offset = 0;
     for (const chunk of binaryChunks) {
@@ -701,38 +438,35 @@ window._rfb = rfb;
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
 
-    audio.onended = function() {
+    audio.onended = () => {
       URL.revokeObjectURL(url);
-      if (audioQueue.length > 0) playNextAudioChunk();
-      else { isPlaying = false; audioIndicator.classList.remove('playing'); }
+      if (audioQueue.length > 0) playAudio();
+      else { isPlaying = false; hideStatus(); }
     };
-    audio.onerror = function() {
+    audio.onerror = () => {
       URL.revokeObjectURL(url);
       isPlaying = false;
-      audioIndicator.classList.remove('playing');
+      hideStatus();
     };
     try { await audio.play(); } catch (e) {
       console.error('Playback failed:', e);
       isPlaying = false;
-      audioIndicator.classList.remove('playing');
+      hideStatus();
     }
   }
 
   // --- Microphone ---
   async function startRecording() {
     if (isRecording) return;
-    console.log('[mic] startRecording called');
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
       });
-      console.log('[mic] getUserMedia succeeded');
       audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
       const source = audioContext.createMediaStreamSource(mediaStream);
       audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
 
-      let chunkCount = 0;
-      audioProcessor.onaudioprocess = function(e) {
+      audioProcessor.onaudioprocess = (e) => {
         if (!isRecording) return;
         const float32 = e.inputBuffer.getChannelData(0);
         const int16 = new Int16Array(float32.length);
@@ -744,8 +478,6 @@ window._rfb = rfb;
         let binary = '';
         for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
         send({ type: 'audio', data: btoa(binary) });
-        chunkCount++;
-        if (chunkCount % 20 === 1) console.log('[mic] audio chunks sent:', chunkCount);
       };
 
       source.connect(audioProcessor);
@@ -753,78 +485,34 @@ window._rfb = rfb;
       isRecording = true;
       micBtn.classList.add('recording');
       send({ type: 'voice_start' });
-      console.log('[mic] recording started, voice_start sent');
     } catch (err) {
       console.error('[mic] Error:', err);
-      addMessage('Microphone access denied or error: ' + (err.message || err), 'error');
     }
   }
 
   function stopRecording() {
     if (!isRecording) return;
-    console.log('[mic] stopRecording called');
     isRecording = false;
     micBtn.classList.remove('recording');
     if (audioProcessor) audioProcessor.disconnect();
     audioProcessor = null;
-    if (mediaStream) mediaStream.getTracks().forEach(function(t) { t.stop(); });
+    if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
     mediaStream = null;
     if (audioContext) audioContext.close();
     audioContext = null;
     send({ type: 'voice_stop' });
-    transcriptBar.textContent = '';
-    transcriptBar.classList.remove('active');
+    hideTranscript();
   }
 
-  // --- UI ---
-  function addMessage(text, type) {
-    showThinking(false);
-    const el = document.createElement('div');
-    el.className = 'message ' + type;
-    el.textContent = text;
-    messagesEl.appendChild(el);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
-
-  let thinkingEl = null;
-  function showThinking(show) {
-    if (show && !thinkingEl) {
-      thinkingEl = document.createElement('div');
-      thinkingEl.className = 'thinking visible';
-      thinkingEl.innerHTML = '<span></span><span></span><span></span>';
-      messagesEl.appendChild(thinkingEl);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    } else if (!show && thinkingEl) {
-      thinkingEl.remove();
-      thinkingEl = null;
-    }
-  }
-
-  function truncate(s, n) {
-    return s.length > n ? s.substring(0, n) + '...' : s;
-  }
-
-  function sendText() {
-    const text = textInput.value.trim();
-    if (!text) return;
-    addMessage(text, 'user');
-    send({ type: 'text', text: text });
-    textInput.value = '';
-  }
-
-  sendBtn.addEventListener('click', sendText);
-  textInput.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
-  });
-
-  micBtn.addEventListener('mousedown', function(e) { e.preventDefault(); startRecording(); });
+  // --- Events ---
+  micBtn.addEventListener('mousedown', (e) => { e.preventDefault(); startRecording(); });
   micBtn.addEventListener('mouseup', stopRecording);
   micBtn.addEventListener('mouseleave', stopRecording);
-  micBtn.addEventListener('touchstart', function(e) { e.preventDefault(); startRecording(); });
-  micBtn.addEventListener('touchend', function(e) { e.preventDefault(); stopRecording(); });
+  micBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startRecording(); });
+  micBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopRecording(); });
   micBtn.addEventListener('touchcancel', stopRecording);
 
-  window.addEventListener('resize', function() {
+  window.addEventListener('resize', () => {
     send({ type: 'viewport', width: window.innerWidth, height: window.innerHeight });
   });
 
