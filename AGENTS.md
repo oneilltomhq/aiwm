@@ -13,7 +13,8 @@ The core differentiator: **the AI infers what you need to see.** Not just execut
 ### What works
 - Headless sway on the server (no GPU, `WLR_BACKENDS=headless WLR_RENDERER=pixman`)
 - Pi agent framework (`@mariozechner/pi-*` v0.55.1) as orchestrator
-- 7 tools: `spawn_terminal`, `spawn_browser`, `arrange_workspace`, `set_viewport`, `screenshot_workspace`, `list_windows`, `bash`
+- 11 tools: `spawn_terminal`, `spawn_browser`, `arrange_workspace`, `set_viewport`, `screenshot_workspace`, `list_windows`, `bash`, `type_text`, `send_key`, `click`, `scroll`
+- Full input injection: `wtype` for keyboard input, `ydotool` for mouse events
 - Viewport adaptation: desktop (tiled) vs phone (stacking + AI picks focus)
 - wayvnc streaming on port 5900
 - LLM calls via exe.dev gateway (`http://169.254.169.254/gateway/llm/anthropic`) with `ANTHROPIC_API_KEY=dummy`
