@@ -489,11 +489,9 @@ const vncStatus = document.getElementById('vncStatus');
 let rfb = null;
 
 function connectVNC() {
-  // wayvnc WebSocket is on port 5901 of the same host
+  // VNC WebSocket is proxied through the same server on /vnc
   const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const host = location.hostname;
-  const vncPort = 5901;
-  const url = wsProto + '//' + host + ':' + vncPort;
+  const url = wsProto + '//' + location.host + '/vnc';
 
   vncStatus.textContent = 'Connecting...';
   vncOverlay.style.display = '';
@@ -525,7 +523,7 @@ function connectVNC() {
   } catch (e) {
     console.error('VNC connection error:', e);
     vncStatus.textContent = 'Error';
-    vncOverlay.innerHTML = '<div>Failed to connect to workspace</div><div style="font-size:11px;margin-top:8px;color:#666">VNC WebSocket on port 5901 may not be available</div>';
+    vncOverlay.innerHTML = '<div>Failed to connect to workspace</div><div style="font-size:11px;margin-top:8px;color:#666">VNC WebSocket proxy may not be available</div>';
     setTimeout(connectVNC, 5000);
   }
 }

@@ -17,9 +17,9 @@
  *   { type: "thinking" }                         — agent is processing
  *   { type: "error", message }                   — error message
  */
-import { WebSocketServer, WebSocket } from "ws";
-import { IncomingMessage } from "http";
-import { createServer } from "http";
+import { WebSocketServer, WebSocket, createWebSocketStream } from "ws";
+import { IncomingMessage, createServer } from "http";
+import { createConnection } from "net";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { createDeepgramStream, type TranscriptEvent } from "./deepgram.js";
@@ -41,6 +41,50 @@ interface ClientState {
   viewport: { width: number; height: number };
   utteranceBuffer: string;  // accumulates final transcript segments
   isVoiceActive: boolean;
+}
+
+const VNC_WS_PORT = 5901;
+
+/**
+ * Proxy a WebSocket upgrade request directly to wayvnc's WebSocket on port 5901.
+ * This is a raw TCP proxy — we forward the HTTP upgrade request as-is and then
+ * pipe data bidirectionally. No WebSocket parsing on our side.
+ */
+function proxyVncWebSocket(req: IncomingMessage, clientSocket: import("net").Socket, head: Buffer) {
+  const upstream = createConnection({ host: "127.0.0.1", port: VNC_WS_PORT }, () => {
+    // Reconstruct the HTTP upgrade request to send to wayvnc
+    let reqLine = `GET ${req.url ?? "/"} HTTP/1.1\r\n`;
+    for (let i = 0; i < req.rawHeaders.length; i += 2) {
+      const key = req.rawHeaders[i];
+      const val = req.rawHeaders[i + 1];
+      // Rewrite Host header to point to the upstream
+      if (key.toLowerCase() === "host") {
+        reqLine += `Host: 127.0.0.1:${VNC_WS_PORT}\r\n`;
+      } else {
+        reqLine += `${key}: ${val}\r\n`;
+      }
+    }
+    reqLine += "\r\n";
+    upstream.write(reqLine);
+    if (head.length > 0) upstream.write(head);
+
+    // Pipe bidirectionally
+    upstream.pipe(clientSocket);
+    clientSocket.pipe(upstream);
+  });
+
+  upstream.on("error", (err) => {
+    console.error("[vnc-proxy] Upstream error:", err.message);
+    clientSocket.destroy();
+  });
+
+  clientSocket.on("error", (err) => {
+    console.error("[vnc-proxy] Client socket error:", err.message);
+    upstream.destroy();
+  });
+
+  clientSocket.on("close", () => upstream.destroy());
+  upstream.on("close", () => clientSocket.destroy());
 }
 
 export function startVoiceServer(config: VoiceServerConfig) {
@@ -89,7 +133,23 @@ export function startVoiceServer(config: VoiceServerConfig) {
     }
   });
 
-  const wss = new WebSocketServer({ server: httpServer });
+  // Main WebSocket server handles chat/voice on default path
+  const wss = new WebSocketServer({ noServer: true });
+
+  // Handle HTTP upgrade: route /vnc to wayvnc proxy, everything else to chat/voice WSS
+  httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
+    const pathname = (req.url ?? "/").split("?")[0];
+
+    if (pathname === "/vnc") {
+      // Proxy WebSocket to wayvnc on port 5901
+      proxyVncWebSocket(req, socket as any, head as Buffer);
+    } else {
+      // Chat/voice WebSocket
+      wss.handleUpgrade(req, socket as any, head as Buffer, (ws) => {
+        wss.emit("connection", ws, req);
+      });
+    }
+  });
 
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     console.log(`[voice] Client connected from ${req.socket.remoteAddress}`);
