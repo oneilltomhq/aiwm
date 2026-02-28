@@ -52,16 +52,18 @@ export function startVoiceServer(config: VoiceServerConfig) {
   if (!deepgramKey) console.warn("[voice] No DEEPGRAM_API_KEY set — STT disabled");
   if (!elevenKey) console.warn("[voice] No ELEVENLABS_API_KEY set — TTS disabled");
 
-  // HTTP server for serving the web client
+  // HTTP server for serving the web client + noVNC assets
   const httpServer = createServer((req, res) => {
     const clientDir = join(import.meta.dirname ?? ".", "..", "client");
 
     let filePath: string;
-    if (req.url === "/" || req.url === "/index.html") {
+    const urlPath = (req.url ?? "/").split("?")[0]; // strip query params
+    if (urlPath === "/" || urlPath === "/index.html") {
       filePath = join(clientDir, "index.html");
     } else {
-      // Serve other static files from client dir
-      const safePath = req.url?.replace(/\.\.\//g, "") ?? "";
+      // Serve static files from client dir (noVNC core, vendor, etc.)
+      // Strip path traversal attempts
+      const safePath = urlPath.replace(/\.\.\/|\.\.$/g, "");
       filePath = join(clientDir, safePath);
     }
 
@@ -70,10 +72,14 @@ export function startVoiceServer(config: VoiceServerConfig) {
       const contentTypes: Record<string, string> = {
         html: "text/html",
         js: "application/javascript",
+        mjs: "application/javascript",
         css: "text/css",
         png: "image/png",
         svg: "image/svg+xml",
         ico: "image/x-icon",
+        json: "application/json",
+        woff: "font/woff",
+        woff2: "font/woff2",
       };
       res.writeHead(200, { "Content-Type": contentTypes[ext ?? "html"] ?? "application/octet-stream" });
       res.end(readFileSync(filePath));
@@ -188,6 +194,8 @@ async function handleClientMessage(
       if (client.utteranceBuffer.trim()) {
         const text = client.utteranceBuffer.trim();
         client.utteranceBuffer = "";
+        // Send the final transcript back as a user message so it appears in chat
+        sendToClient(client.ws, { type: "user_message", text });
         await processUserInput(client, text, agent, elevenKey, voiceId);
       }
       break;
