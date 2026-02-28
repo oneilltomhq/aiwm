@@ -21,12 +21,27 @@ The core differentiator: **the AI infers what you need to see.** Not just execut
 - Viewport adaptation: desktop (tiled) vs phone (stacking + AI picks focus)
 - wayvnc streaming on port 5900
 - LLM calls via exe.dev gateway (`http://169.254.169.254/gateway/llm/anthropic`) with `ANTHROPIC_API_KEY=dummy`
+- **Voice + WebSocket server** on port 8080 with web thin client
+  - WebSocket protocol for thin client ↔ orchestrator communication
+  - Deepgram streaming STT (speech-to-text) via WebSocket API
+  - ElevenLabs TTS (text-to-speech) via streaming REST API
+  - Hold-to-talk mic capture with real-time interim transcripts
+  - Audio streaming playback of agent responses
+  - Live tool call feedback + thinking indicators
+  - Automatic viewport reporting from thin client
+  - Text input also supported alongside voice
 
 ### Key files
-- `src/index.ts` — main entry, Pi Agent setup, system prompt, REPL
+- `src/index.ts` — main entry, Pi Agent setup, system prompt, REPL + voice server init
 - `src/tools.ts` — all agent tools (sway IPC wrappers)
 - `src/sway.ts` — low-level sway IPC (calls `swaymsg`, `grim`)
+- `src/voice-server.ts` — WebSocket server, voice pipeline orchestration, HTTP static file server
+- `src/deepgram.ts` — Deepgram streaming STT via WebSocket
+- `src/elevenlabs.ts` — ElevenLabs TTS via streaming REST
+- `src/cdp.ts` — Chrome DevTools Protocol helper
+- `client/index.html` — web thin client (mic capture, audio playback, chat UI)
 - `config/sway-headless.conf` — sway config for headless mode
+- `.env.example` — template for API keys (Deepgram, ElevenLabs)
 
 ### How to run
 ```bash
@@ -64,12 +79,12 @@ Sway and VNC may already be running in tmux sessions. Check `tmux ls`.
 ### 1. ~~Chromium in sway~~ ✅ DONE
 Chromium (Playwright's Chrome for Testing) runs headed in headless sway with `--ozone-platform=wayland --no-sandbox --disable-gpu --remote-debugging-port=9222`. Navigation via CDP (Chrome DevTools Protocol) is reliable. Agent can screenshot, read page text, and execute JS in the browser.
 
-### 2. WebSocket protocol between client and orchestrator
-Right now viewport changes are communicated via chat ("I switched to my phone"). Instead:
-- Thin client connects via WebSocket, sends `{viewport: {width, height}, input: ["touch", "voice"], orientation: "portrait"}`
-- Orchestrator receives this and auto-adapts layout
-- Orchestrator pushes surface list updates back to client
-- This is the foundation for the adaptive UI
+### 2. ~~WebSocket protocol between client and orchestrator~~ ✅ DONE
+Thin client connects via WebSocket on port 8080. Protocol supports:
+- Client → Server: audio (base64 PCM), text, viewport, voice_start/stop
+- Server → Client: transcript, response, audio (base64 mp3), tool_call, thinking, error
+- Viewport auto-reported on connect and resize
+- Next: auto-trigger agent layout adaptation when viewport changes
 
 ### 3. Proactive surface inference
 The high-value feature. The agent should infer layout changes from conversation context without being told:
@@ -79,8 +94,13 @@ The high-value feature. The agent should infer layout changes from conversation 
 - Subagent finishes work → show the result
 This likely means injecting surface state into the system prompt and/or using `transformContext`.
 
-### 4. Voice input
-Deepgram (STT) + ElevenLabs (TTS) integration. Voice captured on the thin client, streamed to server, transcribed, fed to agent. Agent responses spoken back. This is essential for the mobile experience.
+### 4. ~~Voice input/output~~ ✅ DONE
+Deepgram STT + ElevenLabs TTS fully integrated:
+- Hold-to-talk mic capture on thin client → PCM audio streamed via WebSocket
+- Server streams audio to Deepgram for real-time STT with interim transcripts
+- Transcribed text fed to agent, agent response sent to ElevenLabs TTS
+- TTS audio streamed back to client as mp3 chunks for playback
+- Requires API keys: `DEEPGRAM_API_KEY` and `ELEVENLABS_API_KEY` (see `.env.example`)
 
 ### 5. Better streaming than VNC
 VNC is fine for proof of concept but has limitations (no audio, compression artifacts on text). Consider:

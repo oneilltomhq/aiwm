@@ -7,6 +7,7 @@
 import { Agent } from "@mariozechner/pi-agent-core";
 import { getModel, registerBuiltInApiProviders } from "@mariozechner/pi-ai";
 import { allTools } from "./tools.js";
+import { startVoiceServer } from "./voice-server.js";
 import * as readline from "readline";
 
 // Register built-in providers (Anthropic, OpenAI, etc.)
@@ -92,14 +93,19 @@ async function main() {
     }
   });
 
-  // Simple REPL
+  // Start voice/WebSocket server
+  const voiceServer = startVoiceServer({ agent });
+  console.log("[aiwm] Voice server started — thin clients connect on port 8080");
+
+  // Simple REPL (for local terminal use alongside voice clients)
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
   console.log("\n=== AIWM — AI Window Manager ===");
-  console.log("Type messages to control your workspace.\n");
+  console.log("Type messages to control your workspace.");
+  console.log("Web client: http://localhost:8080\n");
 
   const prompt = () => {
     rl.question("you> ", async (input) => {
