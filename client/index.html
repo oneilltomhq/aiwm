@@ -662,6 +662,9 @@ window._rfb = rfb;
       case 'thinking':
         showThinking(true);
         break;
+      case 'thinking_done':
+        showThinking(false);
+        break;
       case 'error':
         addMessage(msg.message, 'error');
         break;

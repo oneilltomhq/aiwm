@@ -94,9 +94,9 @@ export function createDeepgramStream(opts: DeepgramStreamOptions) {
     onError?.(err);
   });
 
-  ws.on("close", () => {
+  ws.on("close", (code, reason) => {
     isOpen = false;
-    console.log("[deepgram] WebSocket closed");
+    console.log(`[deepgram] WebSocket closed (code=${code}, reason=${reason?.toString() || 'none'})`);
     onClose?.();
   });
 
@@ -123,6 +123,7 @@ export function createDeepgramStream(opts: DeepgramStreamOptions) {
     set onTranscript(fn: (event: TranscriptEvent) => void) { onTranscript = fn; },
     set onError(fn: (err: Error) => void) { onError = fn; },
     set onClose(fn: () => void) { onClose = fn; },
+    get onCloseHandler() { return onClose; },
     set onOpen(fn: () => void) { onOpen = fn; },
   };
 }

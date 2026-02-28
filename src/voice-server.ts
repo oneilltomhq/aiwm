@@ -41,6 +41,7 @@ interface ClientState {
   viewport: { width: number; height: number };
   utteranceBuffer: string;  // accumulates final transcript segments
   isVoiceActive: boolean;
+  audioBuffer: Buffer[];    // buffered audio chunks while Deepgram connects
 }
 
 const VNC_WS_PORT = 5901;
@@ -160,6 +161,7 @@ export function startVoiceServer(config: VoiceServerConfig) {
       viewport: { width: 1920, height: 1080 },
       utteranceBuffer: "",
       isVoiceActive: false,
+      audioBuffer: [],
     };
 
     ws.on("message", async (data: Buffer) => {
@@ -238,32 +240,47 @@ async function handleClientMessage(
 ) {
   switch (msg.type) {
     case "voice_start":
+      console.log("[voice] voice_start received");
       client.isVoiceActive = true;
       client.utteranceBuffer = "";
+      client.audioBuffer = [];
       if (deepgramKey) {
         startDeepgramSession(client, deepgramKey);
       }
       break;
 
     case "voice_stop":
+      console.log(`[voice] voice_stop received (buffer: ${client.utteranceBuffer.length} chars)`);
       client.isVoiceActive = false;
-      // Close Deepgram session
-      client.deepgramStream?.close();
-      client.deepgramStream = null;
+      client.audioBuffer = [];
+      // Tell Deepgram to finish processing, then wait for final transcripts
+      if (client.deepgramStream) {
+        const stream = client.deepgramStream;
+        client.deepgramStream = null;
+        await waitForFinalTranscript(client, stream);
+      }
       // Process accumulated utterance
       if (client.utteranceBuffer.trim()) {
         const text = client.utteranceBuffer.trim();
         client.utteranceBuffer = "";
+        console.log(`[voice] Final utterance: "${text}"`);
         // Send the final transcript back as a user message so it appears in chat
         sendToClient(client.ws, { type: "user_message", text });
         await processUserInput(client, text, agent, elevenKey, voiceId);
+      } else {
+        console.log("[voice] No utterance captured");
       }
       break;
 
     case "audio":
-      if (client.deepgramStream?.connected && msg.data) {
+      if (msg.data) {
         const audio = Buffer.from(msg.data, "base64");
-        client.deepgramStream.sendAudio(audio);
+        if (client.deepgramStream?.connected) {
+          client.deepgramStream.sendAudio(audio);
+        } else if (client.isVoiceActive) {
+          // Buffer audio until Deepgram connection is ready
+          client.audioBuffer.push(audio);
+        }
       }
       break;
 
@@ -284,6 +301,30 @@ async function handleClientMessage(
     default:
       console.log(`[voice] Unknown message type: ${msg.type}`);
   }
+}
+
+/**
+ * Send CloseStream to Deepgram and wait for it to finish sending transcripts.
+ * Resolves when the WebSocket closes or after a timeout.
+ */
+function waitForFinalTranscript(client: ClientState, stream: ReturnType<typeof createDeepgramStream>): Promise<void> {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      console.log("[voice] Deepgram drain timeout, closing");
+      resolve();
+    }, 3000); // max 3s wait for final transcripts
+
+    const origOnClose = stream.onCloseHandler;
+    stream.onClose = () => {
+      clearTimeout(timeout);
+      console.log(`[voice] Deepgram drained (buffer: ${client.utteranceBuffer.length} chars)`);
+      origOnClose?.();
+      resolve();
+    };
+
+    // Tell Deepgram to finalize — this sends CloseStream then closes after 500ms
+    stream.close();
+  });
 }
 
 function startDeepgramSession(client: ClientState, apiKey: string) {
@@ -311,6 +352,17 @@ function startDeepgramSession(client: ClientState, apiKey: string) {
     // Accumulate final transcript segments
     if (event.isFinal && event.text) {
       client.utteranceBuffer += (client.utteranceBuffer ? " " : "") + event.text;
+    }
+  };
+
+  stream.onOpen = () => {
+    // Flush any audio buffered while waiting for Deepgram to connect
+    if (client.audioBuffer.length > 0) {
+      console.log(`[voice] Flushing ${client.audioBuffer.length} buffered audio chunks to Deepgram`);
+      for (const chunk of client.audioBuffer) {
+        stream.sendAudio(chunk);
+      }
+      client.audioBuffer = [];
     }
   };
 
@@ -378,6 +430,8 @@ async function processUserInput(
       console.log("[voice] TTS: skipped (no API key)");
     } else {
       console.log("[voice] TTS: skipped (no response text)");
+      // Agent completed but produced no text — clear thinking indicator
+      sendToClient(client.ws, { type: "thinking_done" });
     }
   } catch (err: any) {
     console.error("[voice] Agent error:", err.message);
